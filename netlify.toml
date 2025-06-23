@@ -1,0 +1,32 @@
+
+[build]
+# Command to run during the build process. Installs root and function dependencies.
+command = "npm install && cd netlify/functions && npm install"
+# Directory containing Netlify Functions.
+functions = "netlify/functions"
+# Directory to publish to Netlify (your frontend assets).
+# Changed to "." because deploy_to_netlify_direct moves 'public' contents to the root of the deploy.
+publish = "."
+
+# Redirect for Single Page Application (SPA) routing.
+# Ensures that all non-matching paths serve index.html for client-side routing.
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200
+
+# Redirect for API routes to Netlify Functions.
+# This is the crucial fix for your 404 error.
+# It tells Netlify to internally rewrite any request starting with /api/
+# to the base path of your 'api' Netlify Function, passing the subpath along.
+# The 'api' function (api.js) is expected to handle sub-paths (e.g., /chat-bot)
+# internally using its Express router.
+[[redirects]]
+from = "/api/*"
+to = "/.netlify/functions/api/:splat"
+status = 200
+force = true
+
+[functions]
+# Specifies the bundler for Node.js functions. esbuild is recommended for performance.
+node_bundler = "esbuild"

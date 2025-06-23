@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoChat: Simple Full Stack Bot</title>
+    <!-- Tailwind CSS CDN for quick and responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom CSS to complement Tailwind and handle specific layout/scroll behavior */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5; /* Light grey background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh; /* Full viewport height */
+            margin: 0;
+            padding: 1rem; /* Padding around the chat container */
+            box-sizing: border-box;
+        }
+
+        #chat-container {
+            width: 100%;
+            max-width: 500px; /* Max width for a contained chat experience */
+            min-height: 500px; /* Minimum height for the chat window */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* Ensure content stays within bounds */
+        }
+
+        #message-list {
+            flex-grow: 1; /* Allows message list to take available space */
+            overflow-y: auto; /* Enables scrolling for messages */
+            padding: 1rem;
+            display: flex; /* Use flexbox for messages */
+            flex-direction: column; /* Stack messages vertically */
+            gap: 0.75rem; /* Space between messages */
+        }
+
+        /* Styling for individual messages */
+        .message {
+            max-width: 80%; /* Messages don't take full width */
+            padding: 0.75rem 1rem;
+            border-radius: 1.25rem; /* More rounded corners */
+            word-wrap: break-word; /* Prevents long words from overflowing */
+        }
+
+        .user-message {
+            background-color: #007bff; /* Blue for user messages */
+            color: white;
+            align-self: flex-end; /* Right align user messages */
+            border-bottom-right-radius: 0.25rem; /* Less rounded on one corner for visual distinction */
+        }
+
+        .bot-message {
+            background-color: #e2e8f0; /* Light grey for bot messages */
+            color: #333;
+            align-self: flex-start; /* Left align bot messages */
+            border-bottom-left-radius: 0.25rem; /* Less rounded on one corner */
+        }
+
+        #message-input-area {
+            display: flex;
+            padding: 1rem;
+            border-top: 1px solid #e2e8f0; /* Separator line */
+            background-color: #ffffff; /* White background for input area */
+        }
+
+        #user-input {
+            flex-grow: 1; /* Input field takes most of the width */
+            padding: 0.75rem 1rem;
+            border: 1px solid #cbd5e0; /* Light border */
+            border-radius: 0.5rem;
+            margin-right: 0.75rem; /* Space between input and button */
+            outline: none; /* Remove default outline */
+        }
+
+        #user-input:focus {
+            border-color: #3b82f6; /* Blue border on focus */
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); /* Light blue shadow on focus */
+        }
+
+        #send-button {
+            padding: 0.75rem 1.5rem;
+            background-color: #007bff; /* Blue button */
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out; /* Smooth transition */
+        }
+
+        #send-button:hover {
+            background-color: #0056b3; /* Darker blue on hover */
+        }
+
+        #send-button:disabled {
+            background-color: #a0aec0; /* Grey when disabled */
+            cursor: not-allowed;
+        }
+
+        /* Loading indicator styling */
+        #loading-indicator {
+            display: none; /* Hidden by default */
+            text-align: center;
+            padding: 0.5rem;
+            color: #6b7280; /* Grey text */
+            font-size: 0.875rem;
+        }
+
+        /* Basic spinner animation */
+        #loading-indicator.active::before {
+            content: '';
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            border: 2px solid #ccc;
+            border-top-color: #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            vertical-align: middle;
+            margin-right: 0.5em;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Main chat application container -->
+    <div id="chat-container" class="bg-white rounded-lg shadow-lg">
+        <h1 class="text-2xl font-bold text-center p-4 border-b border-gray-200">EchoChat: Simple Full Stack Bot</h1>
+
+        <!-- Area to display chat messages -->
+        <div id="message-list">
+            <!-- Initial bot message to greet the user -->
+            <div class="message bot-message">Hello! I'm EchoChat. Type a message and I'll echo it back.</div>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="loading-indicator" class="hidden">Sending message...</div>
+
+        <!-- Input area for typing messages and sending -->
+        <div id="message-input-area">
+            <input type="text" id="user-input" placeholder="Type your message..." class="flex-grow p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button id="send-button" class="ml-2 px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">Send</button>
+        </div>
+    </div>
+
+    <script>
+        // Get references to DOM elements
+        const messageList = document.getElementById('message-list');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        const loadingIndicator = document.getElementById('loading-indicator');
+
+        /**
+         * Appends a new message to the chat display.
+         * @param {string} text - The message content.
+         * @param {'user' | 'bot'} sender - The sender type ('user' or 'bot').
+         */
+        function appendMessage(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.classList.add(`${sender}-message`);
+            messageDiv.textContent = text;
+            messageList.appendChild(messageDiv);
+            // Scroll to the bottom to show the newest message
+            messageList.scrollTop = messageList.scrollHeight;
+        }
+
+        /**
+         * Handles sending a message to the backend API.
+         */
+        async function sendMessage() {
+            const message = userInput.value.trim();
+
+            if (!message) {
+                alert('Please type a message before sending.'); // Simple client-side validation
+                return;
+            }
+
+            // Display user's message immediately
+            appendMessage(message, 'user');
+            userInput.value = ''; // Clear the input field
+
+            // Show loading indicator and disable input/button
+            loadingIndicator.classList.remove('hidden');
+            loadingIndicator.classList.add('active'); // Add active class for spinner
+            userInput.disabled = true;
+            sendButton.disabled = true;
+
+            try {
+                // Make a POST request to the Netlify Function API endpoint
+                // The /api/chat path is configured in netlify.toml to redirect to the function
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json' // Request JSON response
+                    },
+                    body: JSON.stringify({ message: message }) // Send message in JSON body
+                });
+
+                if (!response.ok) {
+                    // Handle HTTP errors (e.g., 400, 500)
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json(); // Parse the JSON response
+
+                // Display the bot's response
+                appendMessage(data.response, 'bot');
+
+            } catch (error) {
+                console.error('Error sending message:', error);
+                // Display an error message to the user
+                appendMessage(`Error: ${error.message || 'Could not connect to the bot.'}`, 'bot');
+            } finally {
+                // Hide loading indicator and re-enable input/button
+                loadingIndicator.classList.add('hidden');
+                loadingIndicator.classList.remove('active');
+                userInput.disabled = false;
+                sendButton.disabled = false;
+                userInput.focus(); // Focus input for next message
+            }
+        }
+
+        // Event listeners for sending messages
+        sendButton.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Focus on the input field when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            userInput.focus();
+        });
+    </script>
+
+    <div style="position:fixed;bottom:10px;right:10px;background:rgba(0,0,0,0.7);color:white;padding:5px 10px;border-radius:5px;font-family:sans-serif;font-size:12px">
+        Created by Dakota Rain Lock, powered by Holy Grail. A Dakota Rain Lock Invention.
+    </div>
+    
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "holy-grail-app",
+  "version": "1.0.0",
+  "description": "AI-generated full stack application",
+  "scripts": {
+    "start": "netlify dev"
+  },
+  "dependencies": {}
+}
